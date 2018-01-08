@@ -1,0 +1,61 @@
+- display_only ||= false
+div data-hook="admin_return_authorization_form_fields"
+  table.table.table-bordered.index.return-items-table
+    thead
+      tr data-hook="rma_header"
+        th
+          - if @return_authorization.allow_return_item_changes?
+            = check_box_tag 'select-all'
+        th= Spree.t(:product)
+        th= Spree.t(:state)
+        th= Spree.t(:charged)
+        th= Spree.t(:pre_tax_refund_amount)
+        th= Spree.t(:return_options)
+        th= Spree.t(:exchange_for)
+    tbody
+      = f.fields_for :return_items, @form_return_items do |item_fields|
+        - return_item = item_fields.object
+        - inventory_unit = return_item.inventory_unit
+        - editable ||= inventory_unit.shipped? && @return_authorization.allow_return_item_changes? && !return_item.reimbursement
+        - if line_item_returnable?(inventory_unit.line_item)
+          tr
+            td.inventory-unit-checkbox
+              - if editable
+                = item_fields.hidden_field :inventory_unit_id
+                = item_fields.check_box :_destroy, { checked: return_item.persisted?, class: 'add-item', "data-price" => return_item.pre_tax_amount, readonly: true }, '0', '1'
+            td
+              .variant-name= inventory_unit.variant.name
+              .variant-options= inventory_unit.variant.options_text
+            td= inventory_unit.state.humanize
+            td
+              = return_item.display_pre_tax_amount
+            td
+              = item_fields.text_field :pre_tax_amount, { class: 'refund-amount-input form-control', disabled: true, readonly: true }
+            td
+              - if editable
+                = radio_button_tag inventory_unit.id, 'refund', refund_for_item_return?(return_item), class: 'return-options'
+                label for="<haml_loud"
+                  | "\#{ inventory_unit.id }_refund" &gt;#{Spree.t(:refund)}
+                = radio_button_tag inventory_unit.id, 'exchange_for', exchange_for_item_return?(return_item), class: 'return-options'
+                label for="<haml_loud"
+                  | "\#{ inventory_unit.id }_exchange_for" &gt;#{Spree.t(:exchange)}
+            td
+              - if editable
+                - if return_item.exchange_processed?
+                  = return_item.exchange_variant.exchange_name
+                - else
+                  = item_fields.collection_select :exchange_variant_id, return_item.eligible_exchange_variants, :id, :exchange_name, {}, { class: " return-item-exchange-selection form-control", disabled: display_only }
+  = f.field_container :amount, class: ['alert alert-info'] do
+    = Spree.t(:total_pre_tax_refund)
+    | \:
+    span#total_pre_tax_refund 0.00
+  = f.field_container :reason, class: ['form-group'] do
+    = f.label :reason, Spree.t(:reason)
+    = f.select :return_authorization_reason_id, @return_authorization_reasons.collect{ |r|[r.name, r.id] }, { include_blank: true }, { class: 'select2 form-control add-item', "data-placeholder" => Spree.t(:select_a_return_authorization_reason), disabled: display_only }
+    = f.error_message_on :reason
+  = f.field_container :memo, class: ['form-group'] do
+    = f.label :memo, Spree.t(:memo)
+    = f.text_area :memo, class: 'form-control', disabled: display_only
+    = f.error_message_on :memo
+- if Spree::Config[:expedited_exchanges]
+  .expedited-exchanges-warning= Spree.t(:expedited_exchanges_warning, days_window: Spree::Config[:expedited_exchanges_days_window])
